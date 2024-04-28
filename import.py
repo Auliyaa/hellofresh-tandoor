@@ -1,9 +1,9 @@
 import requests
 import sys
-import xml.etree.ElementTree as ET
 import re
 from html import escape, unescape
 import json
+from lxml import etree
 import zipfile
 import shutil
 import os
@@ -13,11 +13,17 @@ import datetime
 # HTTP GET
 # sample page: https://www.hellofresh.fr/recipes/kottbullar-boulettes-a-la-suedoise-and-linguine-64fb2d1371b62ce128342048
 # ========================================
+print(".. fetching XML document")
 rsp = requests.get(sys.argv[1])
 data = rsp.text
-data = re.sub("\\&\\w+\\;", lambda x: escape(unescape(x.group(0))), data)
-data = re.sub("\\s\\&\\s", " et ", data)
-root = ET.fromstring(data)
+# data = re.sub("\\&\\w+\\;", lambda x: escape(unescape(x.group(0))), data)
+# data = re.sub("\\s\\&\\s", " et ", data)
+# data = re.sub("<script[^>]*>.+@context.+<\\/script[^>]*>","",data)
+with open("data.xml", "w") as data_xml:
+    data_xml.write(data)
+
+parser = etree.XMLParser(recover=True)
+root = etree.fromstring(data, parser)
 
 if rsp.status_code != 200:
     print("failed to fetch url")
@@ -26,6 +32,7 @@ if rsp.status_code != 200:
 # ========================================
 # output json data: import format for TandoorRecipes
 # ========================================
+print(".. preparing JSON data")
 out = dict()
 out["steps"] = []
 out["description"] = None
@@ -40,6 +47,7 @@ out["source_url"] = None
 # ========================================
 # find recipe title
 # ========================================
+print(".. fetching recipe title")
 recipe_title = root.find(".//h1").text
 out["name"] = recipe_title
 
@@ -47,11 +55,12 @@ out["name"] = recipe_title
 # find recipe time
 # ========================================
 # TODO
-out["working_time"] = 35
+out["working_time"] = 0
 
 # ========================================
 # parse ingredients
 # ========================================
+print(".. fetching ingredients")
 out["steps"].append(dict())
 
 # first step is always for recipe ingredients
@@ -110,6 +119,7 @@ for i in ingredients_shipped + ingredients_not_shipped:
 # ========================================
 # parse steps/instructions
 # ========================================
+print(".. fetching steps")
 
 
 def render_txt(xml):
@@ -150,6 +160,7 @@ for step in steps:
 # ========================================
 # fetch image
 # ========================================
+print(".. fetching image")
 img_root = instructions_root = root.find(".//*[@data-test-id='recipe-hero-image']")
 img_src = img_root.find(".//img").attrib["src"]
 
@@ -158,6 +169,7 @@ img_rsp = requests.get(img_src, stream=True)
 # ========================================
 # create files
 # ========================================
+print(".. generating output file")
 with open("recipe.json", "w") as fd_recipe_json:
     fd_recipe_json.write(json.dumps(out, ensure_ascii=False))
 
@@ -172,6 +184,8 @@ today = datetime.datetime.now()
 with zipfile.ZipFile("export_%s-%02d-%02d.zip" % (str(today.year), today.month, today.day), mode="w") as archive:
     archive.write("42.zip")
 
+print(".. cleaning-up")
 os.remove("recipe.json")
 os.remove("image.jpg")
 os.remove("42.zip")
+os.remove("data.xml")
