@@ -42,7 +42,7 @@ out["internal"] = True
 out["nutrition"] = None
 out["servings"] = 1
 out["servings_text"] = ""
-out["source_url"] = None
+out["source_url"] = sys.argv[1]
 
 # ========================================
 # find recipe title
