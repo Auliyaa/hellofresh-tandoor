@@ -10,18 +10,36 @@ import zipfile
 import shutil
 import os
 import datetime
+from serpapi import GoogleSearch
+
+url = None
+if sys.argv[1].startswith("http"):
+    url = sys.argv[1]
+else:
+    print(".. searching recipe")
+    search = GoogleSearch({
+        "q": "hellofresh.fr %s" % sys.argv[1],
+        "location": "Toulouse,France",
+        "hl": "fr",
+        "gl": "fr",
+        "api_key": "adbbe545426c885d4310b808b6ef526b34b26555c6fecb77358b5294bcfe9c41"
+      })
+
+    url = search.get_dict()["organic_results"][0]["link"]
+
+print(".. parsing recipe: %s" % url)
 
 # ========================================
 # HTTP GET
 # sample page: https://www.hellofresh.fr/recipes/kottbullar-boulettes-a-la-suedoise-and-linguine-64fb2d1371b62ce128342048
 # ========================================
 print(".. fetching XML document")
-rsp = requests.get(sys.argv[1])
+rsp = requests.get(url)
 data = rsp.text
 # data = re.sub("\\&\\w+\\;", lambda x: escape(unescape(x.group(0))), data)
 # data = re.sub("\\s\\&\\s", " et ", data)
 # data = re.sub("<script[^>]*>.+@context.+<\\/script[^>]*>","",data)
-with open("data.xml", "w") as data_xml:
+with open("data.xml", "w", encoding='utf-8') as data_xml:
     data_xml.write(data)
 
 parser = etree.XMLParser(recover=True)
@@ -44,7 +62,7 @@ out["internal"] = True
 out["nutrition"] = None
 out["servings"] = 1
 out["servings_text"] = ""
-out["source_url"] = sys.argv[1]
+out["source_url"] = url
 
 # ========================================
 # find recipe title
