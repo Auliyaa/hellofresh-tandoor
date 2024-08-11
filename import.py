@@ -16,13 +16,16 @@ url = None
 if sys.argv[1].startswith("http"):
     url = sys.argv[1]
 else:
+    key = ""
+    with open("./key.txt","r") as key_fd:
+        key = key_fd.read()
     print(".. searching recipe")
     search = GoogleSearch({
         "q": "hellofresh.fr %s" % sys.argv[1],
         "location": "Toulouse,France",
         "hl": "fr",
         "gl": "fr",
-        "api_key": "<add your key here>"
+        "api_key": key
       })
 
     url = search.get_dict()["organic_results"][0]["link"]
@@ -39,8 +42,12 @@ data = rsp.text
 # data = re.sub("\\&\\w+\\;", lambda x: escape(unescape(x.group(0))), data)
 # data = re.sub("\\s\\&\\s", " et ", data)
 # data = re.sub("<script[^>]*>.+@context.+<\\/script[^>]*>","",data)
-with open("data.xml", "w", encoding='utf-8') as data_xml:
-    data_xml.write(data)
+if os.name == 'nt':
+    with open("data.xml", "w", encoding='utf-8') as data_xml:
+        data_xml.write(data)
+else:
+    with open("data.xml", "w") as data_xml:
+        data_xml.write(data)
 
 parser = etree.XMLParser(recover=True)
 root = etree.fromstring(data, parser)
@@ -98,21 +105,26 @@ order=0
 for i in ingredients_shipped + ingredients_not_shipped:
     i_out = dict()
 
-    q_txt = i.find(".//p[@class='sc-9394dad-0 cJeggo']").text
+    q_txt = i.find(".//p[@class='sc-9394dad-0 irjIoo']").text
     q_num = 0
     q_type = ''
     if q_txt == 'selon le goût':
         q_num = 1
         q_type = "mémo"
     else:
-        q_num = float(q_txt.split(' ')[0]
-                 .replace("⅓", "0.33")
-                 .replace("⅔", "0.66")
-                 .replace("⅓", "0.33")
-                 .replace("¼","0.25")
-                 .replace("½", "0.5")
-                 .replace("¾", "0.75"))
-        q_type = ' '.join(q_txt.split(' ')[1:])
+        q_num = 0
+        if len(q_txt.split(' ')) > 1:
+            q_num = float(q_txt.split(' ')[0]
+                     .replace("⅓", "0.33")
+                     .replace("⅔", "0.66")
+                     .replace("⅓", "0.33")
+                     .replace("¼","0.25")
+                     .replace("½", "0.5")
+                     .replace("¾", "0.75"))
+            q_type = ' '.join(q_txt.split(' ')[1:])
+        else:
+            print("!! WARNING !! failed to fetch ingredient quantity. All ingredients will be set to 0 ! Please edit manually after importing.")
+            q_type = q_txt
 
     i_out["unit"] = dict()
     i_out["unit"]["name"] = q_type
@@ -127,7 +139,7 @@ for i in ingredients_shipped + ingredients_not_shipped:
     i_out["always_use_plural_unit"] = False
     i_out["always_use_plural_food"] = False
 
-    name = i.find(".//p[@class='sc-9394dad-0 eERBYk']").text
+    name = i.find(".//p[@class='sc-9394dad-0 bYeIVw']").text
     i_out["food"] = dict()
     i_out["food"]["name"] = name
     i_out["food"]["plural_name"] = None

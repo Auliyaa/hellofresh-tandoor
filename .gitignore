@@ -1,2 +1,5 @@
-
+.idea/
 key.txt
+export*.zip
+
+..gitignore.swp
