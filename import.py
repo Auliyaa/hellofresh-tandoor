@@ -22,7 +22,7 @@ else:
         "location": "Toulouse,France",
         "hl": "fr",
         "gl": "fr",
-        "api_key": "adbbe545426c885d4310b808b6ef526b34b26555c6fecb77358b5294bcfe9c41"
+        "api_key": "<add your key here>"
       })
 
     url = search.get_dict()["organic_results"][0]["link"]
