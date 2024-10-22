@@ -47,10 +47,10 @@ url = None
 
 recipe_data='{"@context":"http://schema.org/","@type":"Recipe","name":"La Végé : salade chèvre chaud  lardons veggie avec une farandole de crudités  de la pomme","author":"HelloFresh","image":"https://img.hellofresh.com/f_auto,fl_lossy,h_640,q_auto,w_1200/hellofresh_s3/image/HF_Y24_R212_W42_FR_QFR23455-1_Main_high-2a49b778.jpg","thumbnailUrl":"https://img.hellofresh.com/f_auto,fl_lossy,h_300,q_auto,w_450/hellofresh_s3/image/HF_Y24_R212_W42_FR_QFR23455-1_Main_high-2a49b778.jpg","description":"Déguster un classique, la salade au chèvre chaud, en version végétarienne tout en conservant le fumé et le croustillant caractéristique des lardons, c\'est possible ! Servez-la accompagnée de petits pains aux noix, de carottes, de pommes et de sucrine. Et aucun compromis sur le goût.","datePublished":"2024-03-04T15:18:42+00:00","totalTime":"PT20M","nutrition":{"@type":"NutritionInformation","calories":"739 kcal","fatContent":"50.8 g","saturatedFatContent":"14 g","carbohydrateContent":"46.2 g","sugarContent":"14.4 g","proteinContent":"23.2 g","fiberContent":null,"cholesterolContent":null,"sodiumContent":"2.87 g","servingSize":"400"},"recipeInstructions":[{"@type":"HowToStep","text":"\nVeillez à bien respecter les quantités indiquées à gauche pour préparer votre recette !\nPréchauffez le four à 210°C sur grill.\nCoupez les petits pains en deux dans l\'épaisseur.\nCoupez le chèvre en rondelles.\n"},{"@type":"HowToStep","text":"\nDisposez les pains sur une plaque recouverte de papier sulfurisé. Placez une rondelle de chèvre et une petite pincée de thym séché (selon votre goût) sur chaque moitié. \nEnfournez-les 8-10 min, ou jusqu\'à ce que le chèvre soit fondant.\nPendant ce temps, faites chauffer un filet d\'huile d\'olive dans une poêle à feu moyen-vif. Faites-y revenir ⅓ sachet de lardons végétaux par personne 4-6 min, ou jusqu\'à ce qu\'ils soient bien dorés.\n"},{"@type":"HowToStep","text":"\nFaites une vinaigrette en mélangeant, par personne : 1 cc de moutarde, 1 pincée de thym séché (selon votre goût), 1½ cs d\'huile d\'olive et 1 cs de vinaigre balsamique dans un saladier. Salez et poivrez.\nCoupez la sucrine en fines lanières.\nCoupez la pomme en quartiers et ôtez-en le trognon. Coupez les quartiers en dés.\nÉpluchez et râpez la carotte.\n\n L’ASTUCE DU CHEF : Il se peut que les premières feuilles de votre sucrine soient légèrement déshydratées ; pensez à les retirer avant de les consommer."},{"@type":"HowToStep","text":"\nJuste avant de servir, ajoutez la sucrine, la carotte et la pomme au saladier. Mélangez.\nDisposez la salade dans des assiettes creuses. Placez les lardons végétaux par-dessus (selon votre goût), puis les tartines de chèvre chaud.\nArrosez d’un filet d’huile d’olive et de vinaigre balsamique si vous le souhaitez (voir L\'ASTUCE). Pour un meilleur équilibre des saveurs, piochez un peu de chaque élément du plat à chaque bouchée.\n\nL\'ASTUCE DU CHEF : Si vous appréciez le mélange sucré-salé, vous pouvez aussi arroser le tout d’un filet de miel."}],"recipeIngredient":["2 pièce(s) Petit pain aux noix","1 pièce(s) Fromage de chèvre frais","½ sachet(s) Thym séché","2 pièce(s) Sucrine","1 pièce(s) Pomme","½ pièce(s) Carotte","⅔ paquet(s) Lardons végétaux","4 cs Huile d\'olive","2 cc Moutarde","2 cs Vinaigre balsamique noir","selon le goût Poivre et sel"],"recipeYield":2,"keywords":["Moins de CO2","Végétarien","SEO"],"recipeCategory":"Plat principal","recipeCuisine":"Française"}'
 j = json.loads(recipe_data,strict=False)
+# print(json.dumps(j,ensure_ascii=False))
 
 print(".. preparing JSON data")
 out = dict()
-
 out["steps"] = []
 out["description"] = None
 out["keywords"] = []
@@ -77,3 +77,41 @@ out["steps"][0]["order"] = 0
 out["steps"][0]["show_as_header"] = False
 out["steps"][0]["show_ingredients_table"] = False
 
+order=0
+for ingredient in j["recipeIngredient"]:
+    ingredient_data = dict()
+    ingredient_data["note"] = ""
+    ingredient_data["order"] = order
+    ingredient_data["is_header"] = False
+    ingredient_data["always_use_plural_unit"] = False
+    ingredient_data["always_use_plural_food"] = False
+
+    ingredient_data["food"] = dict()
+    ingredient_data["food"]["plural_name"] = None
+    ingredient_data["food"]["ignore_shopping"] = False
+    ingredient_data["food"]["supermarket_category"] = None
+    ingredient_data["unit"]=dict()
+
+    tokens = ingredient.split(" ")
+    if ingredient.startswith("selon le goût"):
+        ingredient_data["unit"]["name"] = "mémo"
+        ingredient_data["amount"] = 1
+        ingredient_data["food"]["name"] = " ".join(tokens[3:])
+    else:
+        ingredient_data["unit"]["name"] = tokens[1]
+        ingredient_data["amount"] = float(tokens[0]
+                     .replace("⅓", "0.33")
+                     .replace("⅔", "0.66")
+                     .replace("⅓", "0.33")
+                     .replace("¼","0.25")
+                     .replace("½", "0.5")
+                     .replace("¾", "0.75"))
+        ingredient_data["food"]["name"] = " ".join(tokens[2:])
+
+    ingredient_data["unit"]["plural_name"] = ingredient_data["unit"]["name"]
+    out["steps"][0]["ingredients"].append(ingredient_data)
+    order = order + 1
+
+print(".. fetching steps")
+
+print(json.dumps(out,ensure_ascii=False))
