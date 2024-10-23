@@ -2,30 +2,25 @@
 
 import requests
 import sys
-import re
-from html import escape, unescape
-import json
-from lxml import etree
-import zipfile
-import shutil
 import os
 import datetime
+import json
+import shutil
+import zipfile
+from lxml import etree
 from serpapi import GoogleSearch
 
 url = None
 if sys.argv[1].startswith("http"):
     url = sys.argv[1]
 else:
-    key = ""
-    with open("./key.txt","r") as key_fd:
-        key = key_fd.read()
     print(".. searching recipe")
     search = GoogleSearch({
         "q": "hellofresh.fr %s" % sys.argv[1],
         "location": "Toulouse,France",
         "hl": "fr",
         "gl": "fr",
-        "api_key": key
+        "api_key": "adbbe545426c885d4310b808b6ef526b34b26555c6fecb77358b5294bcfe9c41"
       })
 
     url = search.get_dict()["organic_results"][0]["link"]
@@ -42,12 +37,8 @@ data = rsp.text
 # data = re.sub("\\&\\w+\\;", lambda x: escape(unescape(x.group(0))), data)
 # data = re.sub("\\s\\&\\s", " et ", data)
 # data = re.sub("<script[^>]*>.+@context.+<\\/script[^>]*>","",data)
-if os.name == 'nt':
-    with open("data.xml", "w", encoding='utf-8') as data_xml:
-        data_xml.write(data)
-else:
-    with open("data.xml", "w") as data_xml:
-        data_xml.write(data)
+with open("data.xml", "w", encoding='utf-8') as data_xml:
+    data_xml.write(data)
 
 parser = etree.XMLParser(recover=True)
 root = etree.fromstring(data, parser)
@@ -56,9 +47,11 @@ if rsp.status_code != 200:
     print("failed to fetch url")
     sys.exit(1)
 
-# ========================================
-# output json data: import format for TandoorRecipes
-# ========================================
+recipe_data = root.find(".//script[@id='schema-org']").text
+
+j = json.loads(recipe_data,strict=False)
+print(json.dumps(j,ensure_ascii=False))
+
 print(".. preparing JSON data")
 out = dict()
 out["steps"] = []
@@ -67,26 +60,14 @@ out["keywords"] = []
 out["waiting_time"] = 0
 out["internal"] = True
 out["nutrition"] = None
-out["servings"] = 1
+out["servings"] = j["recipeYield"]
 out["servings_text"] = ""
 out["source_url"] = url
 
-# ========================================
-# find recipe title
-# ========================================
 print(".. fetching recipe title")
-recipe_title = root.find(".//h1").text
-out["name"] = recipe_title
+out["name"] = j["name"]
+out["working_time"] = 0 # use j["totalTime"]
 
-# ========================================
-# find recipe time
-# ========================================
-# TODO
-out["working_time"] = 0
-
-# ========================================
-# parse ingredients
-# ========================================
 print(".. fetching ingredients")
 out["steps"].append(dict())
 
@@ -99,110 +80,63 @@ out["steps"][0]["order"] = 0
 out["steps"][0]["show_as_header"] = False
 out["steps"][0]["show_ingredients_table"] = False
 
-ingredients_shipped = root.findall(".//*[@data-test-id='ingredient-item-shipped']")
-ingredients_not_shipped = root.findall(".//*[@data-test-id='ingredient-item-not-shipped']")
-order=0
-for i in ingredients_shipped + ingredients_not_shipped:
-    i_out = dict()
+order = 0
+for ingredient in j["recipeIngredient"]:
+    ingredient_data = dict()
+    ingredient_data["note"] = ""
+    ingredient_data["order"] = order
+    ingredient_data["is_header"] = False
+    ingredient_data["always_use_plural_unit"] = False
+    ingredient_data["always_use_plural_food"] = False
 
-    q_txt = i.find(".//p[@class='sc-9394dad-0 irjIoo']").text
-    q_num = 0
-    q_type = ''
-    if q_txt == 'selon le goût':
-        q_num = 1
-        q_type = "mémo"
+    ingredient_data["food"] = dict()
+    ingredient_data["food"]["plural_name"] = None
+    ingredient_data["food"]["ignore_shopping"] = False
+    ingredient_data["food"]["supermarket_category"] = None
+    ingredient_data["unit"]=dict()
+
+    tokens = ingredient.split(" ")
+    if ingredient.startswith("selon le goût"):
+        ingredient_data["unit"]["name"] = "mémo"
+        ingredient_data["amount"] = 1
+        ingredient_data["food"]["name"] = " ".join(tokens[3:])
     else:
-        q_num = 0
-        if len(q_txt.split(' ')) > 1:
-            q_num = float(q_txt.split(' ')[0]
+        ingredient_data["unit"]["name"] = tokens[1]
+        ingredient_data["amount"] = float(tokens[0]
                      .replace("⅓", "0.33")
                      .replace("⅔", "0.66")
                      .replace("⅓", "0.33")
                      .replace("¼","0.25")
                      .replace("½", "0.5")
                      .replace("¾", "0.75"))
-            q_type = ' '.join(q_txt.split(' ')[1:])
-        else:
-            print("!! WARNING !! failed to fetch ingredient quantity. All ingredients will be set to 0 ! Please edit manually after importing.")
-            q_type = q_txt
+        ingredient_data["food"]["name"] = " ".join(tokens[2:])
 
-    i_out["unit"] = dict()
-    i_out["unit"]["name"] = q_type
-    i_out["unit"]["plural_name"] = q_type
-    i_out["unit"]["description"] = None
+    ingredient_data["unit"]["plural_name"] = ingredient_data["unit"]["name"]
+    out["steps"][0]["ingredients"].append(ingredient_data)
+    order = order + 1
 
-    i_out["amount"] = q_num
-    i_out["note"] = ""
-    i_out["order"] = order
-    order = order+1
-    i_out["is_header"] = False
-    i_out["always_use_plural_unit"] = False
-    i_out["always_use_plural_food"] = False
-
-    name = i.find(".//p[@class='sc-9394dad-0 bYeIVw']").text
-    i_out["food"] = dict()
-    i_out["food"]["name"] = name
-    i_out["food"]["plural_name"] = None
-    i_out["food"]["ignore_shopping"] = False
-    i_out["food"]["supermarket_category"] = None
-
-    out["steps"][0]["ingredients"].append(i_out)
-
-# ========================================
-# parse steps/instructions
-# ========================================
 print(".. fetching steps")
 
-
-def render_txt(xml):
-    res = ""
-    for sub in xml.iter():
-        if sub.tag == 'p':
-            res += "\n%s\n" % sub.text
-            continue
-        if sub.tag == 'li':
-            if sub.text is None:
-                res += "- %s\n" % sub.find('.//span').text
-            else:
-                res += "- %s\n" % sub.text
-            continue
-    return res
-
-
-instructions_root = root.find(".//*[@data-test-id='instructions']")
-steps = instructions_root.findall(".//span[@type='body-xl-regular'].........")
-for step in steps:
-    step_num = int(step.find(".//span[@type='body-xl-regular']").text)
-    txt_root = step.find(".//span[@type='body-md-regular']")
-    # need to render contents of txt_root here, may contains <ul> as well as raw text
-    step_txt = render_txt(txt_root)
-
+order = 1 # now used for step order
+for instruction in j["recipeInstructions"]:
+    txt = instruction["text"]
+    if txt.startswith("\n"): txt.replace("\n", "", 1)
     step_out = dict()
-    step_out["name"] = "Etape %s" % str(step_num)
-    step_out["instruction"] = step_txt
+    step_out["name"] = "Etape %s" % str(order)
+    step_out["instruction"] = txt
     step_out["ingredients"] = []
     step_out["time"] = 0
-    step_out["order"] = step_num
+    step_out["order"] = order
     step_out["show_as_header"] = False
     step_out["show_ingredients_table"] = True
-
     out["steps"].append(step_out)
 
-
-# ========================================
-# fetch image
-# ========================================
 print(".. fetching image")
-img_root = instructions_root = root.find(".//*[@data-test-id='recipe-hero-image']")
-img_src = img_root.find(".//img").attrib["src"]
+img_rsp = requests.get(j["image"], stream=True)
 
-img_rsp = requests.get(img_src, stream=True)
-
-# ========================================
-# create files
-# ========================================
 print(".. generating output file")
-with open("recipe.json", "w") as fd_recipe_json:
+print(json.dumps(out, ensure_ascii=False))
+with open("recipe.json", "w", encoding="utf-8") as fd_recipe_json:
     fd_recipe_json.write(json.dumps(out, ensure_ascii=False))
 
 with open("image.jpg", "wb") as fd_image_jpg:
